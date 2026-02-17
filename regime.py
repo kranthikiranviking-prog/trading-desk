@@ -1,22 +1,23 @@
-def classify_regime(df):
+def calculate_regime(df):
+
+    if df.empty:
+        return 0
+
     latest = df.iloc[-1]
 
     score = 0
 
-    if latest['close'] > latest['ema20']:
-        score += 25
-    if latest['ema20'] > latest['ema50']:
-        score += 25
-    if latest['rvol'] > 1.2:
-        score += 25
-    if latest['rsi'] > 50:
-        score += 25
+    # EMA Structure
+    if latest["ema20"] > latest["ema50"]:
+        score += 40
 
-    if score >= 70:
-        regime = "Trend"
-    elif score <= 40:
-        regime = "Range"
-    else:
-        regime = "Neutral"
+    # Price above VWAP
+    if latest["close"] > latest["vwap"]:
+        score += 30
 
-    return score, regime
+    # RSI momentum
+    if latest["rsi"] > 55:
+        score += 30
+
+    return score
+

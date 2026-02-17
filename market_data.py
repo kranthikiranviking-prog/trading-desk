@@ -1,24 +1,33 @@
 import os
+import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
-from dotenv import load_dotenv
-import pandas as pd
-from datetime import datetime, timedelta
 
-load_dotenv()
+ALPACA_KEY = os.getenv("ALPACA_API_KEY")
+ALPACA_SECRET = os.getenv("ALPACA_SECRET_KEY")
 
-API_KEY = os.getenv("ALPACA_API_KEY")
-SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
+client = StockHistoricalDataClient(ALPACA_KEY, ALPACA_SECRET)
 
-client = StockHistoricalDataClient(API_KEY, SECRET_KEY)
 
-def get_bars(symbol: str, timeframe=TimeFrame.Minute, limit=100):
+def get_bars(symbol: str):
     request = StockBarsRequest(
         symbol_or_symbols=symbol,
-        timeframe=timeframe,
-        start=datetime.now() - timedelta(days=5)
+        timeframe=TimeFrame.Minute,
+        limit=200
     )
-    bars = client.get_stock_bars(request).df
-    df = bars.reset_index()
-    return df.tail(limit)
+
+    bars = client.get_stock_bars(request)
+
+    df = bars.df
+
+    if df.empty:
+        return pd.DataFrame()
+
+    df = df.reset_index()
+
+    # Normalize column names
+    df.columns = [col.lower() for col in df.columns]
+
+    return df
+
