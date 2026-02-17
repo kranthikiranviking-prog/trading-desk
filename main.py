@@ -66,8 +66,13 @@ def scanner():
 
     results = []
 
-    for symbol in symbols:
+for symbol in symbols:
+    try:
         df = get_bars(symbol)
+
+        if df is None or df.empty or 'close' not in df.columns:
+            continue
+
         df = calculate_indicators(df)
         score, regime = classify_regime(df)
         latest = df.iloc[-1]
@@ -94,6 +99,10 @@ def scanner():
             "bearish_sweep": bool(latest['bearish_sweep']),
             "trade_bias_score": trade_bias
         })
+
+    except Exception as e:
+        print(f"Skipping {symbol}: {e}")
+        continue
 
     db.close()
 
