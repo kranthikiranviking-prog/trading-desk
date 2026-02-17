@@ -12,10 +12,8 @@ from database import init_db, SessionLocal, Watchlist
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-# Initialize database
 init_db()
 
-# Seed initial watchlist if empty
 db_seed = SessionLocal()
 if db_seed.query(Watchlist).count() == 0:
     for sym in ["TSLA", "NVDA", "MSFT", "AAPL", "GOOGL", "XOM"]:
@@ -34,30 +32,6 @@ def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
-@app.get("/stock/{symbol}")
-def analyze_stock(symbol: str):
-    df = get_bars(symbol.upper())
-    df = calculate_indicators(df)
-    score, regime = classify_regime(df)
-
-    latest = df.iloc[-1]
-
-    return {
-        "symbol": symbol.upper(),
-        "price": round(latest['close'], 2),
-        "rvol": round(latest['rvol'], 2),
-        "ema20": round(latest['ema20'], 2),
-        "ema50": round(latest['ema50'], 2),
-        "vwap": round(latest['vwap'], 2),
-        "vwap_distance": round(latest['vwap_distance'], 2),
-        "rsi": round(latest['rsi'], 2),
-        "bullish_sweep": bool(latest['bullish_sweep']),
-        "bearish_sweep": bool(latest['bearish_sweep']),
-        "regime_score": score,
-        "regime": regime
-    }
-
-
 @app.get("/scanner")
 def scanner():
     db = SessionLocal()
@@ -66,43 +40,43 @@ def scanner():
 
     results = []
 
-for symbol in symbols:
-    try:
-        df = get_bars(symbol)
+    for symbol in symbols:
+        try:
+            df = get_bars(symbol)
 
-        if df is None or df.empty or 'close' not in df.columns:
+            if df is None or df.empty or 'close' not in df.columns:
+                continue
+
+            df = calculate_indicators(df)
+            score, regime = classify_regime(df)
+            latest = df.iloc[-1]
+
+            trade_bias = 0
+
+            if regime == "Trend":
+                trade_bias += 30
+            if latest['rvol'] > 2:
+                trade_bias += 20
+            if latest['bullish_sweep']:
+                trade_bias += 20
+            if latest['bearish_sweep']:
+                trade_bias -= 20
+            if latest['vwap_distance'] > 0:
+                trade_bias += 10
+
+            results.append({
+                "symbol": symbol,
+                "price": round(latest['close'], 2),
+                "rvol": round(latest['rvol'], 2),
+                "regime": regime,
+                "bullish_sweep": bool(latest['bullish_sweep']),
+                "bearish_sweep": bool(latest['bearish_sweep']),
+                "trade_bias_score": trade_bias
+            })
+
+        except Exception as e:
+            print(f"Skipping {symbol}: {e}")
             continue
-
-        df = calculate_indicators(df)
-        score, regime = classify_regime(df)
-        latest = df.iloc[-1]
-
-        trade_bias = 0
-
-        if regime == "Trend":
-            trade_bias += 30
-        if latest['rvol'] > 2:
-            trade_bias += 20
-        if latest['bullish_sweep']:
-            trade_bias += 20
-        if latest['bearish_sweep']:
-            trade_bias -= 20
-        if latest['vwap_distance'] > 0:
-            trade_bias += 10
-
-        results.append({
-            "symbol": symbol,
-            "price": round(latest['close'], 2),
-            "rvol": round(latest['rvol'], 2),
-            "regime": regime,
-            "bullish_sweep": bool(latest['bullish_sweep']),
-            "bearish_sweep": bool(latest['bearish_sweep']),
-            "trade_bias_score": trade_bias
-        })
-
-    except Exception as e:
-        print(f"Skipping {symbol}: {e}")
-        continue
 
     db.close()
 
@@ -116,13 +90,21 @@ def add_symbol(symbol: str):
     db = SessionLocal()
     symbol = symbol.upper()
 
+    try:
+        df = get_bars(symbol)
+        if df is None or df.empty or 'close' not in df.columns:
+            db.close()
+            return {"message": "Invalid ticker symbol"}
+    except:
+        db.close()
+        return {"message": "Invalid ticker symbol"}
+
     existing = db.query(Watchlist).filter(Watchlist.symbol == symbol).first()
     if existing:
         db.close()
         return {"message": "Symbol already exists"}
 
-    new_symbol = Watchlist(symbol=symbol)
-    db.add(new_symbol)
+    db.add(Watchlist(symbol=symbol))
     db.commit()
     db.close()
 
