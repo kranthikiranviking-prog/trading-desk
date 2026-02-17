@@ -1,142 +1,163 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
-from market_data import get_bars
+from market_data import get_data
 from indicators import calculate_indicators
-from regime import classify_regime
-from risk_engine import calculate_position
+from regime import calculate_regime
+from risk_engine import calculate_position_size
 
-from database import init_db, SessionLocal, Watchlist
+from database import SessionLocal, Watchlist
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
-init_db()
 
-db_seed = SessionLocal()
-if db_seed.query(Watchlist).count() == 0:
-    for sym in ["TSLA", "NVDA", "MSFT", "AAPL", "GOOGL", "XOM"]:
-        db_seed.add(Watchlist(symbol=sym))
-    db_seed.commit()
-db_seed.close()
+# ===============================
+# DATABASE HELPER
+# ===============================
 
+def get_watchlist():
+    db: Session = SessionLocal()
+    symbols = db.query(Watchlist).all()
+    db.close()
+    return [s.symbol for s in symbols]
+
+
+# ===============================
+# MARKET CONTEXT
+# ===============================
+
+def get_market_context():
+    symbols = ["SPY", "QQQ", "VIXY"]
+    context = {}
+
+    for symbol in symbols:
+        try:
+            df = get_data(symbol)
+            df = calculate_indicators(df)
+            regime_score = calculate_regime(df)
+
+            price = df["close"].iloc[-1]
+
+            regime = (
+                "Trend" if regime_score > 70 else
+                "Range" if regime_score < 40 else
+                "Neutral"
+            )
+
+            context[symbol] = {
+                "price": round(price, 2),
+                "regime": regime
+            }
+
+        except Exception:
+            context[symbol] = {
+                "price": None,
+                "regime": "Error"
+            }
+
+    # Market Bias Logic
+    if (
+        context["SPY"]["regime"] == "Trend" and
+        context["QQQ"]["regime"] == "Trend"
+    ):
+        bias = "Risk-On"
+    elif context["SPY"]["regime"] == "Range":
+        bias = "Choppy"
+    else:
+        bias = "Mixed"
+
+    context["market_bias"] = bias
+
+    return context
+
+
+# ===============================
+# ROOT
+# ===============================
 
 @app.get("/")
 def home():
     return {"message": "Trading Desk Engine Running"}
 
 
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
-
+# ===============================
+# SCANNER
+# ===============================
 
 @app.get("/scanner")
 def scanner():
-    db = SessionLocal()
-    watchlist = db.query(Watchlist).all()
-    symbols = [w.symbol for w in watchlist]
-
     results = []
+
+    symbols = get_watchlist()
 
     for symbol in symbols:
         try:
-            df = get_bars(symbol)
-
-            if df is None or df.empty or 'close' not in df.columns:
-                continue
-
+            df = get_data(symbol)
             df = calculate_indicators(df)
-            score, regime = classify_regime(df)
-            latest = df.iloc[-1]
 
-            # 5-minute structure stop suggestion
-            recent_swings = df[df['swing_low'] == True]
-            suggested_stop = None
+            regime_score = calculate_regime(df)
 
-            if not recent_swings.empty:
-                suggested_stop = round(recent_swings.iloc[-1]['low'] - 0.10, 2)
+            price = df["close"].iloc[-1]
+            rvol = df["volume"].iloc[-1] / df["volume"].rolling(20).mean().iloc[-1]
 
-            trade_bias = 0
-
-            if regime == "Trend":
-                trade_bias += 30
-            if latest['rvol'] > 2:
-                trade_bias += 20
-            if latest['bullish_sweep']:
-                trade_bias += 20
-            if latest['bearish_sweep']:
-                trade_bias -= 20
-            if latest['vwap_distance'] > 0:
-                trade_bias += 10
+            regime = (
+                "Trend" if regime_score > 70 else
+                "Range" if regime_score < 40 else
+                "Neutral"
+            )
 
             results.append({
                 "symbol": symbol,
-                "price": round(latest['close'], 2),
-                "rvol": round(latest['rvol'], 2),
+                "price": round(price, 2),
+                "rvol": round(rvol, 2),
                 "regime": regime,
-                "bullish_sweep": bool(latest['bullish_sweep']),
-                "bearish_sweep": bool(latest['bearish_sweep']),
-                "trade_bias_score": trade_bias,
-                "suggested_stop": suggested_stop
+                "trade_bias_score": regime_score
             })
 
-        except Exception as e:
-            print(f"Skipping {symbol}: {e}")
+        except Exception:
             continue
-
-    db.close()
-
-    results = sorted(results, key=lambda x: x['trade_bias_score'], reverse=True)
 
     return results
 
 
-@app.post("/add_symbol/{symbol}")
-def add_symbol(symbol: str):
-    db = SessionLocal()
-    symbol = symbol.upper()
-
-    try:
-        df = get_bars(symbol)
-        if df is None or df.empty or 'close' not in df.columns:
-            db.close()
-            return {"message": "Invalid ticker symbol"}
-    except:
-        db.close()
-        return {"message": "Invalid ticker symbol"}
-
-    existing = db.query(Watchlist).filter(Watchlist.symbol == symbol).first()
-    if existing:
-        db.close()
-        return {"message": "Symbol already exists"}
-
-    db.add(Watchlist(symbol=symbol))
-    db.commit()
-    db.close()
-
-    return {"message": f"{symbol} added"}
-
-
-@app.delete("/remove_symbol/{symbol}")
-def remove_symbol(symbol: str):
-    db = SessionLocal()
-    symbol = symbol.upper()
-
-    item = db.query(Watchlist).filter(Watchlist.symbol == symbol).first()
-    if not item:
-        db.close()
-        return {"message": "Symbol not found"}
-
-    db.delete(item)
-    db.commit()
-    db.close()
-
-    return {"message": f"{symbol} removed"}
-
+# ===============================
+# RISK CALCULATOR
+# ===============================
 
 @app.get("/risk")
-def risk(entry: float, stop: float):
-    return calculate_position(entry, stop)
+def risk(symbol: str, account_size: float, risk_percent: float, stop_distance: float):
+
+    position_size = calculate_position_size(
+        account_size=account_size,
+        risk_percent=risk_percent,
+        stop_distance=stop_distance
+    )
+
+    return {
+        "symbol": symbol,
+        "shares": round(position_size, 2)
+    }
+
+
+# ===============================
+# DASHBOARD
+# ===============================
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+
+    market_context = get_market_context()
+    symbols = get_watchlist()
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "market_context": market_context,
+            "symbols": symbols
+        }
+    )
 
