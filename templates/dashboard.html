@@ -1,59 +1,39 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Trading Desk</title>
+    <title>Trading Desk Dashboard</title>
     <style>
         body {
-            background-color: #0e1117;
-            color: #ffffff;
+            background-color: #0f172a;
+            color: white;
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
         }
-
-        h1 {
-            margin-bottom: 10px;
-        }
-
-        .top-stock {
-            background-color: #1f2937;
-            padding: 20px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-        }
-
-        .scanner-table {
+        table {
             width: 100%;
             border-collapse: collapse;
         }
-
-        .scanner-table th, .scanner-table td {
+        th, td {
             padding: 10px;
             text-align: left;
         }
-
-        .scanner-table tr:nth-child(even) {
-            background-color: #1a1f2b;
+        tr:nth-child(even) {
+            background-color: #1e293b;
         }
-
         .green { color: #22c55e; }
         .yellow { color: #eab308; }
-        .gray { color: #6b7280; }
-
-        .risk-panel {
-            margin-top: 20px;
-            padding: 20px;
-            background-color: #1f2937;
-            border-radius: 8px;
-        }
-
-        input {
-            padding: 5px;
-            margin: 5px;
-        }
-
+        .red { color: #ef4444; }
         button {
             padding: 5px 10px;
+            background-color: #334155;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        input {
+            padding: 5px;
+            background-color: #1e293b;
+            color: white;
+            border: 1px solid #334155;
         }
     </style>
 </head>
@@ -61,11 +41,14 @@
 
 <h1>Trading Desk Dashboard</h1>
 
-<div class="top-stock" id="topStock">
-    Loading top opportunity...
+<div style="margin-bottom:20px;">
+    <input type="text" id="newSymbol" placeholder="Add Ticker (e.g. AMD)">
+    <button onclick="addSymbol()">Add</button>
 </div>
 
-<table class="scanner-table" id="scannerTable">
+<div id="topStock"></div>
+
+<table id="scannerTable">
     <thead>
         <tr>
             <th>Symbol</th>
@@ -73,13 +56,16 @@
             <th>RVOL</th>
             <th>Regime</th>
             <th>Sweep</th>
+            <th>Action</th>
         </tr>
     </thead>
     <tbody></tbody>
 </table>
 
-<div class="risk-panel">
-    <h3>Risk Calculator</h3>
+<br><br>
+
+<div>
+    <h2>Risk Calculator</h2>
     Entry: <input type="number" id="entry">
     Stop: <input type="number" id="stop">
     <button onclick="calculateRisk()">Calculate</button>
@@ -87,8 +73,9 @@
 </div>
 
 <script>
+
 async function loadScanner() {
-    const response = await fetch('/scanner');
+    const response = await fetch("/scanner");
     const data = await response.json();
 
     const tableBody = document.querySelector("#scannerTable tbody");
@@ -96,30 +83,48 @@ async function loadScanner() {
 
     const top = data[0];
 
-    document.getElementById("topStock").innerHTML =
-        `<h2>${top.symbol}</h2>
-         Bias Score: ${top.trade_bias_score} <br>
-         RVOL: ${top.rvol} <br>
-         Regime: ${top.regime}`;
+    document.getElementById("topStock").innerHTML = `
+        <h2>${top.symbol}</h2>
+        Bias Score: ${top.trade_bias_score} <br>
+        RVOL: ${top.rvol} <br>
+        Regime: ${top.regime}
+    `;
 
     data.forEach(stock => {
-        let rowClass = "gray";
-        if (stock.trade_bias_score >= 60) rowClass = "green";
+
+        let rowClass = "";
+        if (stock.trade_bias_score >= 70) rowClass = "green";
         else if (stock.trade_bias_score >= 40) rowClass = "yellow";
 
-        const sweep = stock.bullish_sweep ? "Bullish" :
-                      stock.bearish_sweep ? "Bearish" : "None";
+        let sweep = "None";
+        if (stock.bullish_sweep) sweep = "Bullish";
+        if (stock.bearish_sweep) sweep = "Bearish";
 
         tableBody.innerHTML += `
-            <tr class="${rowClass}">
+            <tr>
                 <td>${stock.symbol}</td>
-                <td>${stock.trade_bias_score}</td>
+                <td class="${rowClass}">${stock.trade_bias_score}</td>
                 <td>${stock.rvol}</td>
                 <td>${stock.regime}</td>
                 <td>${sweep}</td>
+                <td><button onclick="removeSymbol('${stock.symbol}')">Remove</button></td>
             </tr>
         `;
     });
+}
+
+async function addSymbol() {
+    const symbol = document.getElementById("newSymbol").value;
+    if (!symbol) return;
+
+    await fetch(`/add_symbol/${symbol}`, { method: "POST" });
+    document.getElementById("newSymbol").value = "";
+    loadScanner();
+}
+
+async function removeSymbol(symbol) {
+    await fetch(`/remove_symbol/${symbol}`, { method: "DELETE" });
+    loadScanner();
 }
 
 async function calculateRisk() {
@@ -130,13 +135,12 @@ async function calculateRisk() {
     const data = await response.json();
 
     document.getElementById("riskOutput").innerHTML =
-        `Position Size: ${data.position_size} <br>
-         2R Target: ${data["2R_target"]} <br>
-         3R Target: ${data["3R_target"]}`;
+        `Position Size: ${data.position_size} shares`;
 }
 
 loadScanner();
 setInterval(loadScanner, 60000);
+
 </script>
 
 </body>
