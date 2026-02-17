@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from market_data import get_data
+from market_data import get_bars
 from indicators import calculate_indicators
 from regime import calculate_regime
 from risk_engine import calculate_position_size
@@ -35,7 +35,7 @@ def get_market_context():
 
     for symbol in symbols:
         try:
-            df = get_data(symbol)
+            df = get_bars(symbol)
             df = calculate_indicators(df)
             regime_score = calculate_regime(df)
 
@@ -95,7 +95,7 @@ def scanner():
 
     for symbol in symbols:
         try:
-            df = get_data(symbol)
+            df = get_bars(symbol)
             df = calculate_indicators(df)
 
             regime_score = calculate_regime(df)
