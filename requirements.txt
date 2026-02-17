@@ -7,4 +7,4 @@ ta
 python-dotenv
 pytz
 jinja2
-
+sqlalchemy
