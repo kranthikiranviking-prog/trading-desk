@@ -8,9 +8,13 @@
             color: white;
             font-family: Arial, sans-serif;
         }
+        h1 {
+            margin-bottom: 10px;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
+            margin-top: 15px;
         }
         th, td {
             padding: 10px;
@@ -19,9 +23,13 @@
         tr:nth-child(even) {
             background-color: #1e293b;
         }
+        tr:hover {
+            background-color: #334155;
+        }
         .green { color: #22c55e; }
         .yellow { color: #eab308; }
         .red { color: #ef4444; }
+
         button {
             padding: 5px 10px;
             background-color: #334155;
@@ -29,20 +37,33 @@
             border: none;
             cursor: pointer;
         }
+
         input {
             padding: 5px;
             background-color: #1e293b;
             color: white;
             border: 1px solid #334155;
+            margin-right: 5px;
         }
+
+        #topStock {
+            margin-top: 15px;
+            font-size: 18px;
+        }
+
+        #riskOutput {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
     </style>
 </head>
 <body>
 
 <h1>Trading Desk Dashboard</h1>
 
-<div style="margin-bottom:20px;">
-    <input type="text" id="newSymbol" placeholder="Add Ticker (e.g. AMD)">
+<div>
+    <input type="text" id="newSymbol" placeholder="Add Ticker (e.g. AMZN)">
     <button onclick="addSymbol()">Add</button>
 </div>
 
@@ -56,6 +77,7 @@
             <th>RVOL</th>
             <th>Regime</th>
             <th>Sweep</th>
+            <th>Suggested Stop</th>
             <th>Action</th>
         </tr>
     </thead>
@@ -65,7 +87,7 @@
 <br><br>
 
 <div>
-    <h2>Risk Calculator</h2>
+    <h2>Trade Panel</h2>
     Entry: <input type="number" id="entry">
     Stop: <input type="number" id="stop">
     <button onclick="calculateRisk()">Calculate</button>
@@ -81,10 +103,15 @@ async function loadScanner() {
     const tableBody = document.querySelector("#scannerTable tbody");
     tableBody.innerHTML = "";
 
+    if (data.length === 0) {
+        tableBody.innerHTML = "<tr><td colspan='7'>No data available</td></tr>";
+        return;
+    }
+
     const top = data[0];
 
     document.getElementById("topStock").innerHTML = `
-        <h2>${top.symbol}</h2>
+        <h2>Top Opportunity: ${top.symbol}</h2>
         Bias Score: ${top.trade_bias_score} <br>
         RVOL: ${top.rvol} <br>
         Regime: ${top.regime}
@@ -101,16 +128,27 @@ async function loadScanner() {
         if (stock.bearish_sweep) sweep = "Bearish";
 
         tableBody.innerHTML += `
-            <tr>
+            <tr onclick="loadTrade('${stock.symbol}', ${stock.price}, ${stock.suggested_stop})" style="cursor:pointer;">
                 <td>${stock.symbol}</td>
                 <td class="${rowClass}">${stock.trade_bias_score}</td>
                 <td>${stock.rvol}</td>
                 <td>${stock.regime}</td>
                 <td>${sweep}</td>
-                <td><button onclick="removeSymbol('${stock.symbol}')">Remove</button></td>
+                <td>${stock.suggested_stop ?? 'N/A'}</td>
+                <td><button onclick="event.stopPropagation(); removeSymbol('${stock.symbol}')">Remove</button></td>
             </tr>
         `;
     });
+}
+
+function loadTrade(symbol, price, stop) {
+    document.getElementById("entry").value = price;
+
+    if (stop !== null && stop !== undefined) {
+        document.getElementById("stop").value = stop;
+    }
+
+    calculateRisk();
 }
 
 async function addSymbol() {
@@ -118,6 +156,7 @@ async function addSymbol() {
     if (!symbol) return;
 
     await fetch(`/add_symbol/${symbol}`, { method: "POST" });
+
     document.getElementById("newSymbol").value = "";
     loadScanner();
 }
@@ -130,6 +169,8 @@ async function removeSymbol(symbol) {
 async function calculateRisk() {
     const entry = document.getElementById("entry").value;
     const stop = document.getElementById("stop").value;
+
+    if (!entry || !stop) return;
 
     const response = await fetch(`/risk?entry=${entry}&stop=${stop}`);
     const data = await response.json();
