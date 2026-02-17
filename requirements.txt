@@ -9,6 +9,8 @@ fastapi==0.129.0
 greenlet==3.3.1
 h11==0.16.0
 idna==3.11
+Jinja2==3.1.6
+MarkupSafe==3.0.3
 msgpack==1.1.2
 numpy==2.4.2
 pandas==3.0.0
