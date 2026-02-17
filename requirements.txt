@@ -6,4 +6,5 @@ numpy
 ta
 python-dotenv
 pytz
+jinja2
 
