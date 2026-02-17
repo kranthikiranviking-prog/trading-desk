@@ -1,26 +1,38 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
 from market_data import get_bars
 from indicators import calculate_indicators
 from regime import classify_regime
 from risk_engine import calculate_position
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from fastapi import Request
+
 from database import init_db, SessionLocal, Watchlist
 
 app = FastAPI()
+templates = Jinja2Templates(directory="templates")
+
+# Initialize database
 init_db()
+
+# Seed initial watchlist if empty
 db_seed = SessionLocal()
 if db_seed.query(Watchlist).count() == 0:
     for sym in ["TSLA", "NVDA", "MSFT", "AAPL", "GOOGL", "XOM"]:
         db_seed.add(Watchlist(symbol=sym))
     db_seed.commit()
 db_seed.close()
-templates = Jinja2Templates(directory="templates")
+
 
 @app.get("/")
 def home():
     return {"message": "Trading Desk Engine Running"}
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    return templates.TemplateResponse("dashboard.html", {"request": request})
+
 
 @app.get("/stock/{symbol}")
 def analyze_stock(symbol: str):
@@ -45,22 +57,16 @@ def analyze_stock(symbol: str):
         "regime": regime
     }
 
-@app.get("/risk")
-def risk(entry: float, stop: float):
-    return calculate_position(entry, stop)
-
-@app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 @app.get("/scanner")
 def scanner():
-db = SessionLocal()
-watchlist = db.query(Watchlist).all()
-symbols = [w.symbol for w in watchlist]
+    db = SessionLocal()
+    watchlist = db.query(Watchlist).all()
+    symbols = [w.symbol for w in watchlist]
+
     results = []
 
-     for symbol in symbols:
+    for symbol in symbols:
         df = get_bars(symbol)
         df = calculate_indicators(df)
         score, regime = classify_regime(df)
@@ -89,10 +95,12 @@ symbols = [w.symbol for w in watchlist]
             "trade_bias_score": trade_bias
         })
 
+    db.close()
+
     results = sorted(results, key=lambda x: x['trade_bias_score'], reverse=True)
-   db.close()
 
     return results
+
 
 @app.post("/add_symbol/{symbol}")
 def add_symbol(symbol: str):
@@ -111,6 +119,7 @@ def add_symbol(symbol: str):
 
     return {"message": f"{symbol} added"}
 
+
 @app.delete("/remove_symbol/{symbol}")
 def remove_symbol(symbol: str):
     db = SessionLocal()
@@ -126,4 +135,9 @@ def remove_symbol(symbol: str):
     db.close()
 
     return {"message": f"{symbol} removed"}
+
+
+@app.get("/risk")
+def risk(entry: float, stop: float):
+    return calculate_position(entry, stop)
 
