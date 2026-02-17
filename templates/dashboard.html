@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trading Desk</title>
+    <style>
+        body {
+            background-color: #0e1117;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        .top-stock {
+            background-color: #1f2937;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .scanner-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .scanner-table th, .scanner-table td {
+            padding: 10px;
+            text-align: left;
+        }
+
+        .scanner-table tr:nth-child(even) {
+            background-color: #1a1f2b;
+        }
+
+        .green { color: #22c55e; }
+        .yellow { color: #eab308; }
+        .gray { color: #6b7280; }
+
+        .risk-panel {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #1f2937;
+            border-radius: 8px;
+        }
+
+        input {
+            padding: 5px;
+            margin: 5px;
+        }
+
+        button {
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Trading Desk Dashboard</h1>
+
+<div class="top-stock" id="topStock">
+    Loading top opportunity...
+</div>
+
+<table class="scanner-table" id="scannerTable">
+    <thead>
+        <tr>
+            <th>Symbol</th>
+            <th>Bias</th>
+            <th>RVOL</th>
+            <th>Regime</th>
+            <th>Sweep</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<div class="risk-panel">
+    <h3>Risk Calculator</h3>
+    Entry: <input type="number" id="entry">
+    Stop: <input type="number" id="stop">
+    <button onclick="calculateRisk()">Calculate</button>
+    <div id="riskOutput"></div>
+</div>
+
+<script>
+async function loadScanner() {
+    const response = await fetch('/scanner');
+    const data = await response.json();
+
+    const tableBody = document.querySelector("#scannerTable tbody");
+    tableBody.innerHTML = "";
+
+    const top = data[0];
+
+    document.getElementById("topStock").innerHTML =
+        `<h2>${top.symbol}</h2>
+         Bias Score: ${top.trade_bias_score} <br>
+         RVOL: ${top.rvol} <br>
+         Regime: ${top.regime}`;
+
+    data.forEach(stock => {
+        let rowClass = "gray";
+        if (stock.trade_bias_score >= 60) rowClass = "green";
+        else if (stock.trade_bias_score >= 40) rowClass = "yellow";
+
+        const sweep = stock.bullish_sweep ? "Bullish" :
+                      stock.bearish_sweep ? "Bearish" : "None";
+
+        tableBody.innerHTML += `
+            <tr class="${rowClass}">
+                <td>${stock.symbol}</td>
+                <td>${stock.trade_bias_score}</td>
+                <td>${stock.rvol}</td>
+                <td>${stock.regime}</td>
+                <td>${sweep}</td>
+            </tr>
+        `;
+    });
+}
+
+async function calculateRisk() {
+    const entry = document.getElementById("entry").value;
+    const stop = document.getElementById("stop").value;
+
+    const response = await fetch(`/risk?entry=${entry}&stop=${stop}`);
+    const data = await response.json();
+
+    document.getElementById("riskOutput").innerHTML =
+        `Position Size: ${data.position_size} <br>
+         2R Target: ${data["2R_target"]} <br>
+         3R Target: ${data["3R_target"]}`;
+}
+
+loadScanner();
+setInterval(loadScanner, 60000);
+</script>
+
+</body>
+</html>
+

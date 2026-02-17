@@ -3,8 +3,12 @@ from market_data import get_bars
 from indicators import calculate_indicators
 from regime import classify_regime
 from risk_engine import calculate_position
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi import Request
 
 app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
 @app.get("/")
 def home():
@@ -37,6 +41,9 @@ def analyze_stock(symbol: str):
 def risk(entry: float, stop: float):
     return calculate_position(entry, stop)
 
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 @app.get("/scanner")
 def scanner():
