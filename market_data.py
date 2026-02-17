@@ -4,8 +4,8 @@ from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 
-ALPACA_KEY = os.getenv("ALPACA_API_KEY")
-ALPACA_SECRET = os.getenv("ALPACA_SECRET_KEY")
+ALPACA_KEY = "PKPRWU23DILLAHZ6RKYXCXSSO6"
+ALPACA_SECRET = "8HCcmEjW5jGrVacRxRjCrtZZRyFwSpCifmmtd9Xds2DU"
 
 client = StockHistoricalDataClient(ALPACA_KEY, ALPACA_SECRET)
 
