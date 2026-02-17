@@ -1,4 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+
 from market_data import get_bars
 from indicators import calculate_indicators
 from regime import calculate_regime
@@ -6,11 +9,21 @@ from risk_engine import calculate_position_size
 
 app = FastAPI()
 
+templates = Jinja2Templates(directory="templates")
+
+
+# =====================================
+# ROOT
+# =====================================
 
 @app.get("/")
 def home():
     return {"message": "Trading Desk Engine Running"}
 
+
+# =====================================
+# SCANNER
+# =====================================
 
 @app.get("/scanner")
 def scanner():
@@ -27,7 +40,6 @@ def scanner():
             continue
 
         df = calculate_indicators(df)
-
         regime_score = calculate_regime(df)
 
         latest = df.iloc[-1]
@@ -49,6 +61,48 @@ def scanner():
     return results
 
 
+# =====================================
+# MARKET CONTEXT (MACRO)
+# =====================================
+
+@app.get("/market_context")
+def market_context():
+
+    macro_symbols = ["SPY", "QQQ", "VIXY"]
+
+    context = {}
+
+    for symbol in macro_symbols:
+
+        df = get_bars(symbol)
+
+        if df.empty:
+            continue
+
+        df = calculate_indicators(df)
+        regime_score = calculate_regime(df)
+
+        latest = df.iloc[-1]
+
+        regime = (
+            "Trend" if regime_score >= 70 else
+            "Range" if regime_score < 40 else
+            "Neutral"
+        )
+
+        context[symbol] = {
+            "price": round(latest["close"], 2),
+            "regime": regime,
+            "rvol": round(latest["rvol"], 2)
+        }
+
+    return context
+
+
+# =====================================
+# RISK CALCULATOR
+# =====================================
+
 @app.get("/risk")
 def risk(
     account_size: float,
@@ -68,6 +122,18 @@ def risk(
     return {
         "shares": round(shares, 2),
         "risk_per_share": round(stop_distance, 2),
-        "2R_target": round(entry_price + 2 * stop_distance, 2)
+        "2R_target": round(entry_price + (2 * stop_distance), 2)
     }
+
+
+# =====================================
+# DASHBOARD
+# =====================================
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {"request": request}
+    )
 
