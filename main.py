@@ -6,8 +6,16 @@ from risk_engine import calculate_position
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
+from database import init_db, SessionLocal, Watchlist
 
 app = FastAPI()
+init_db()
+db_seed = SessionLocal()
+if db_seed.query(Watchlist).count() == 0:
+    for sym in ["TSLA", "NVDA", "MSFT", "AAPL", "GOOGL", "XOM"]:
+        db_seed.add(Watchlist(symbol=sym))
+    db_seed.commit()
+db_seed.close()
 templates = Jinja2Templates(directory="templates")
 
 @app.get("/")
@@ -47,10 +55,12 @@ def dashboard(request: Request):
 
 @app.get("/scanner")
 def scanner():
-    watchlist = ["TSLA", "NVDA", "MSFT", "AAPL", "GOOGL", "XOM"]
+db = SessionLocal()
+watchlist = db.query(Watchlist).all()
+symbols = [w.symbol for w in watchlist]
     results = []
 
-    for symbol in watchlist:
+     for symbol in symbols:
         df = get_bars(symbol)
         df = calculate_indicators(df)
         score, regime = classify_regime(df)
@@ -80,5 +90,40 @@ def scanner():
         })
 
     results = sorted(results, key=lambda x: x['trade_bias_score'], reverse=True)
+   db.close()
 
     return results
+
+@app.post("/add_symbol/{symbol}")
+def add_symbol(symbol: str):
+    db = SessionLocal()
+    symbol = symbol.upper()
+
+    existing = db.query(Watchlist).filter(Watchlist.symbol == symbol).first()
+    if existing:
+        db.close()
+        return {"message": "Symbol already exists"}
+
+    new_symbol = Watchlist(symbol=symbol)
+    db.add(new_symbol)
+    db.commit()
+    db.close()
+
+    return {"message": f"{symbol} added"}
+
+@app.delete("/remove_symbol/{symbol}")
+def remove_symbol(symbol: str):
+    db = SessionLocal()
+    symbol = symbol.upper()
+
+    item = db.query(Watchlist).filter(Watchlist.symbol == symbol).first()
+    if not item:
+        db.close()
+        return {"message": "Symbol not found"}
+
+    db.delete(item)
+    db.commit()
+    db.close()
+
+    return {"message": f"{symbol} removed"}
+
