@@ -32,4 +32,19 @@ def calculate_indicators(df):
         (df['rvol'] > 1.2)
     )
 
+    # Identify swing lows
+   df['swing_low'] = (
+        (df['low'] < df['low'].shift(1)) &
+        (df['low'] < df['low'].shift(2)) &
+        (df['low'] < df['low'].shift(-1)) &
+        (df['low'] < df['low'].shift(-2))
+    )
+
+   # Identify swing highs
+   df['swing_high'] = (
+        (df['high'] > df['high'].shift(1)) &
+        (df['high'] > df['high'].shift(2)) &
+        (df['high'] > df['high'].shift(-1)) &
+        (df['high'] > df['high'].shift(-2))
+    )
     return df

@@ -50,6 +50,11 @@ def scanner():
             df = calculate_indicators(df)
             score, regime = classify_regime(df)
             latest = df.iloc[-1]
+            recent_swings = df[df['swing_low'] == True]
+            suggested_stop = None
+
+           if not recent_swings.empty:
+           suggested_stop = round(recent_swings.iloc[-1]['low'] - 0.10, 2)
 
             trade_bias = 0
 
@@ -65,6 +70,7 @@ def scanner():
                 trade_bias += 10
 
             results.append({
+                "suggested_stop": suggested_stop,
                 "symbol": symbol,
                 "price": round(latest['close'], 2),
                 "rvol": round(latest['rvol'], 2),
