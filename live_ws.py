@@ -1,14 +1,13 @@
 # live_ws.py
 
 import os
-import asyncio
 from alpaca.data.live import StockDataStream
-from institutional_engine import rolling_bars, evaluate_breakout
+from institutional_engine import rolling_bars, evaluate_breakout, latest_prices
 
 API_KEY = os.getenv("ALPACA_API_KEY")
 SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
-symbols = ["TSLA", "NVDA", "SPY"]
+symbols = ["TSLA", "NVDA", "SPY", "QQQ"]
 
 stream = StockDataStream(API_KEY, SECRET_KEY)
 
@@ -16,22 +15,23 @@ stream = StockDataStream(API_KEY, SECRET_KEY)
 async def on_bar(bar):
     symbol = bar.symbol
 
-    if symbol not in rolling_bars:
-        return
+    # Always update live price (works in extended hours)
+    latest_prices[symbol] = bar.close
 
-    rolling_bars[symbol].append({
-        "open": bar.open,
-        "high": bar.high,
-        "low": bar.low,
-        "close": bar.close,
-        "volume": bar.volume,
-        "timestamp": bar.timestamp,
-    })
+    if symbol in rolling_bars:
+        rolling_bars[symbol].append({
+            "open": bar.open,
+            "high": bar.high,
+            "low": bar.low,
+            "close": bar.close,
+            "volume": bar.volume,
+            "timestamp": bar.timestamp,
+        })
 
-    signal = evaluate_breakout(symbol)
+        signal = evaluate_breakout(symbol)
 
-    if signal:
-        print("🚨 SIGNAL DETECTED:", signal)
+        if signal:
+            print("🚨 SIGNAL:", signal)
 
 
 def start_stream():

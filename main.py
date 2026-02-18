@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+# main.py
+
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from fastapi import Request
-from institutional_engine import latest_signal
+from institutional_engine import latest_signal, latest_prices
 from live_ws import start_stream
 import threading
 
@@ -10,7 +11,6 @@ app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
 
-# Start Alpaca stream in background
 def run_stream():
     start_stream()
 
@@ -25,4 +25,9 @@ def dashboard(request: Request):
 @app.get("/signals")
 def get_signals():
     return latest_signal
+
+
+@app.get("/prices")
+def get_prices():
+    return latest_prices
 

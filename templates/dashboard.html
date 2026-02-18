@@ -4,11 +4,11 @@
     <title>Institutional Trading Desk</title>
     <style>
         body { font-family: Arial; background: #111; color: white; padding: 20px; }
-        .signal-card {
+        .card {
             background: #1a1a1a;
             padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 8px;
+            margin-bottom: 10px;
+            border-radius: 6px;
         }
     </style>
 </head>
@@ -16,10 +16,29 @@
 
 <h1>Institutional Trading Desk</h1>
 
+<h2>Live Prices</h2>
+<div id="prices"></div>
+
 <h2>Live Signals</h2>
 <div id="signals"></div>
 
 <script>
+
+async function loadPrices() {
+    const response = await fetch('/prices');
+    const data = await response.json();
+
+    const container = document.getElementById('prices');
+    container.innerHTML = '';
+
+    for (let symbol in data) {
+        container.innerHTML += `
+            <div class="card">
+                ${symbol}: ${data[symbol].toFixed(2)}
+            </div>
+        `;
+    }
+}
 
 async function loadSignals() {
     const response = await fetch('/signals');
@@ -32,7 +51,7 @@ async function loadSignals() {
         const s = data[symbol];
 
         container.innerHTML += `
-            <div class="signal-card">
+            <div class="card">
                 <b>${s.symbol}</b><br>
                 Type: ${s.type}<br>
                 Entry: ${s.entry}<br>
@@ -44,7 +63,8 @@ async function loadSignals() {
     }
 }
 
-setInterval(loadSignals, 5000);
+setInterval(loadPrices, 3000);
+setInterval(loadSignals, 3000);
 
 </script>
 
