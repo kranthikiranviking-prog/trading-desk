@@ -1,22 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Trading Desk Dashboard</title>
+    <title>Institutional Trading Desk</title>
     <style>
         body { font-family: Arial; background: #111; color: white; padding: 20px; }
-        h2 { margin-top: 40px; }
-        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
-        th, td { padding: 10px; border: 1px solid #333; text-align: center; }
-        th { background: #222; }
-        .trend { color: #00ff88; }
-        .range { color: #ff4444; }
-        .neutral { color: #ffaa00; }
-        .macro-box { display: flex; gap: 20px; margin-bottom: 20px; }
-        .macro-card {
+        .signal-card {
             background: #1a1a1a;
             padding: 15px;
+            margin-bottom: 15px;
             border-radius: 8px;
-            flex: 1;
         }
     </style>
 </head>
@@ -24,119 +16,38 @@
 
 <h1>Institutional Trading Desk</h1>
 
-<h2>Macro Context</h2>
-<div id="macro" class="macro-box"></div>
-
-<h2>Scanner</h2>
-<table>
-    <thead>
-        <tr>
-            <th>Symbol</th>
-            <th>Price</th>
-            <th>RVOL</th>
-            <th>Regime</th>
-            <th>Score</th>
-        </tr>
-    </thead>
-    <tbody id="scanner-body"></tbody>
-</table>
-
-<h2>Risk Calculator</h2>
-<input id="account" placeholder="Account Size" value="50000">
-<input id="risk" placeholder="Risk %" value="1">
-<input id="entry" placeholder="Entry">
-<input id="stop" placeholder="Stop">
-<button onclick="calculateRisk()">Calculate</button>
-
-<div id="risk-output"></div>
+<h2>Live Signals</h2>
+<div id="signals"></div>
 
 <script>
 
-async function loadScanner() {
-    const response = await fetch('/scanner');
+async function loadSignals() {
+    const response = await fetch('/signals');
     const data = await response.json();
 
-    const body = document.getElementById('scanner-body');
-    body.innerHTML = '';
-
-    data.forEach(stock => {
-        const row = document.createElement('tr');
-
-        row.innerHTML = `
-            <td>${stock.symbol}</td>
-            <td>${stock.price}</td>
-            <td>${stock.rvol}</td>
-            <td class="${stock.regime.toLowerCase()}">${stock.regime}</td>
-            <td>${stock.regime_score}</td>
-        `;
-
-        body.appendChild(row);
-    });
-}
-
-async function loadMacro() {
-    const response = await fetch('/market_context');
-    const data = await response.json();
-
-    const container = document.getElementById('macro');
+    const container = document.getElementById('signals');
     container.innerHTML = '';
 
     for (let symbol in data) {
-        const card = document.createElement('div');
-        card.className = 'macro-card';
+        const s = data[symbol];
 
-        card.innerHTML = `
-            <h3>${symbol}</h3>
-            <p>Price: ${data[symbol].price}</p>
-            <p>Regime: ${data[symbol].regime}</p>
-            <p>RVOL: ${data[symbol].rvol}</p>
+        container.innerHTML += `
+            <div class="signal-card">
+                <b>${s.symbol}</b><br>
+                Type: ${s.type}<br>
+                Entry: ${s.entry}<br>
+                Stop: ${s.stop}<br>
+                Shares: ${s.shares}<br>
+                Target: ${s.target}
+            </div>
         `;
-
-        container.appendChild(card);
     }
 }
 
-async function calculateRisk() {
-    const account = document.getElementById('account').value;
-    const risk = document.getElementById('risk').value;
-    const entry = document.getElementById('entry').value;
-    const stop = document.getElementById('stop').value;
-
-    const response = await fetch(
-        `/risk?account_size=${account}&risk_percent=${risk}&entry_price=${entry}&stop_price=${stop}`
-    );
-
-    const data = await response.json();
-
-    document.getElementById('risk-output').innerHTML =
-        `Shares: ${data.shares}<br>
-         Risk per Share: ${data.risk_per_share}<br>
-         2R Target: ${data["2R_target"]}`;
-}
-
-loadScanner();
-loadMacro();
-
-setInterval(loadScanner, 60000);
-setInterval(loadMacro, 60000);
+setInterval(loadSignals, 5000);
 
 </script>
 
 </body>
 </html>
 
-const ws = new WebSocket(`wss://${window.location.host}/ws`);
-
-ws.onmessage = function(event) {
-    const data = JSON.parse(event.data);
-
-    data.forEach(bar => {
-        const symbol = bar.S;
-        const price = bar.c;
-
-        const priceCell = document.querySelector(`#price-${symbol}`);
-        if (priceCell) {
-            priceCell.innerText = price.toFixed(2);
-        }
-    });
-};

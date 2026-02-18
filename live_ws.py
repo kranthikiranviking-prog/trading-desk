@@ -1,53 +1,42 @@
-import asyncio
-import json
-import websockets
-from fastapi import WebSocket
+# live_ws.py
+
 import os
+import asyncio
+from alpaca.data.live import StockDataStream
+from institutional_engine import rolling_bars, evaluate_breakout
 
-ALPACA_KEY = "YOUR_KEY"
-ALPACA_SECRET = "YOUR_SECRET"
-
-ALPACA_WS = "wss://stream.data.alpaca.markets/v2/iex"
+API_KEY = os.getenv("ALPACA_API_KEY")
+SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
 symbols = ["TSLA", "NVDA", "SPY"]
 
-connected_clients = set()
-
-async def alpaca_stream():
-    async with websockets.connect(ALPACA_WS) as ws:
-
-        # Authenticate
-        await ws.send(json.dumps({
-            "action": "auth",
-            "key": ALPACA_KEY,
-            "secret": ALPACA_SECRET
-        }))
-
-        await ws.recv()
-
-        # Subscribe to minute bars
-        await ws.send(json.dumps({
-            "action": "subscribe",
-            "bars": symbols
-        }))
-
-        await ws.recv()
-
-        while True:
-            message = await ws.recv()
-            data = json.loads(message)
-
-            for client in connected_clients:
-                await client.send_text(message)
+stream = StockDataStream(API_KEY, SECRET_KEY)
 
 
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    connected_clients.add(websocket)
+async def on_bar(bar):
+    symbol = bar.symbol
 
-    try:
-        while True:
-            await websocket.receive_text()
-    except:
-        connected_clients.remove(websocket)
+    if symbol not in rolling_bars:
+        return
+
+    rolling_bars[symbol].append({
+        "open": bar.open,
+        "high": bar.high,
+        "low": bar.low,
+        "close": bar.close,
+        "volume": bar.volume,
+        "timestamp": bar.timestamp,
+    })
+
+    signal = evaluate_breakout(symbol)
+
+    if signal:
+        print("🚨 SIGNAL DETECTED:", signal)
+
+
+def start_stream():
+    for symbol in symbols:
+        stream.subscribe_bars(on_bar, symbol)
+
+    stream.run()
 
