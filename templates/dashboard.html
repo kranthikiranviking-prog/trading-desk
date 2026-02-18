@@ -125,3 +125,18 @@ setInterval(loadMacro, 60000);
 </body>
 </html>
 
+const ws = new WebSocket(`wss://${window.location.host}/ws`);
+
+ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+
+    data.forEach(bar => {
+        const symbol = bar.S;
+        const price = bar.c;
+
+        const priceCell = document.querySelector(`#price-${symbol}`);
+        if (priceCell) {
+            priceCell.innerText = price.toFixed(2);
+        }
+    });
+};

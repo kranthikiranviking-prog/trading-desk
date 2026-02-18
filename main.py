@@ -7,6 +7,10 @@ from indicators import calculate_indicators
 from regime import calculate_regime
 from risk_engine import calculate_position_size
 
+from live_ws import websocket_endpoint, alpaca_stream
+from fastapi import WebSocket
+import asyncio
+
 app = FastAPI()
 
 templates = Jinja2Templates(directory="templates")
@@ -137,3 +141,10 @@ def dashboard(request: Request):
         {"request": request}
     )
 
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(alpaca_stream())
+
+@app.websocket("/ws")
+async def websocket_route(websocket: WebSocket):
+    await websocket_endpoint(websocket)
