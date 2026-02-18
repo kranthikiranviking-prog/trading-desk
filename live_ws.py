@@ -4,42 +4,35 @@ import os
 from alpaca.data.live import StockDataStream
 from institutional_engine import rolling_bars, evaluate_breakout, latest_prices
 
-API_KEY = os.getenv("ALPACA_API_KEY")
-SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
-symbols = ["TSLA", "NVDA", "SPY", "QQQ"]
+def start_stream():
 
-stream = StockDataStream(
-    api_key,
-    secret_key,
-    feed="iex"
-)
+    api_key = os.getenv("ALPACA_API_KEY")
+    secret_key = os.getenv("ALPACA_SECRET_KEY")
 
-async def on_bar(bar):
-    symbol = bar.symbol
+    stream = StockDataStream(
+        api_key,
+        secret_key,
+        feed="iex"   # FREE FEED
+    )
 
-    # Always update live price (works in extended hours)
-    latest_prices[symbol] = bar.close
+    async def on_bar(bar):
+        symbol = bar.symbol
 
-    if symbol in rolling_bars:
-        rolling_bars[symbol].append({
+        data = {
             "open": bar.open,
             "high": bar.high,
             "low": bar.low,
             "close": bar.close,
             "volume": bar.volume,
-            "timestamp": bar.timestamp,
-        })
+        }
 
-        signal = evaluate_breakout(symbol)
+        rolling_bars[symbol].append(data)
+        latest_prices[symbol] = bar.close
 
-        if signal:
-            print("🚨 SIGNAL:", signal)
+        evaluate_breakout(symbol)
 
-
-def start_stream():
-    for symbol in symbols:
-        stream.subscribe_bars(on_bar, symbol)
+    stream.subscribe_bars(on_bar, "TSLA", "NVDA", "SPY", "QQQ")
 
     stream.run()
 
