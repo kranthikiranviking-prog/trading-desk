@@ -9,8 +9,11 @@ SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
 symbols = ["TSLA", "NVDA", "SPY", "QQQ"]
 
-stream = StockDataStream(API_KEY, SECRET_KEY)
-
+stream = StockDataStream(
+    api_key,
+    secret_key,
+    feed="iex"
+)
 
 async def on_bar(bar):
     symbol = bar.symbol

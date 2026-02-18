@@ -8,13 +8,18 @@ from live_ws import start_stream
 import threading
 
 app = FastAPI()
-
 templates = Jinja2Templates(directory="templates")
 
-def run_stream():
-    start_stream()
+stream_started = False
 
-threading.Thread(target=run_stream, daemon=True).start()
+
+@app.on_event("startup")
+def startup_event():
+    global stream_started
+    if not stream_started:
+        threading.Thread(target=start_stream, daemon=True).start()
+        stream_started = True
+        print("🚀 Alpaca stream started")
 
 
 @app.get("/", response_class=HTMLResponse)
