@@ -17,5 +17,5 @@ latest_prices = {}
 
 
 def calculate_ema(series, period=20):
-    return series.ewm(span=period, adjust=False).
+           return series.ewm(span=period, adjust=False).mean()
 
